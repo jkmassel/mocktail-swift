@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-macos:
+    name: Test (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Run tests
+        run: swift test
+
+  test-ios:
+    name: Test (iOS Simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve dependencies
+        run: xcodebuild -resolvePackageDependencies -scheme MockWebServer -destination 'platform=iOS Simulator,name=iPhone 16'
+      - name: Build and test
+        run: xcodebuild test -scheme MockWebServer -destination 'platform=iOS Simulator,name=iPhone 16'
