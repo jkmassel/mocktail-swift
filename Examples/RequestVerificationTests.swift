@@ -17,7 +17,7 @@ import MockWebServer
         try server.start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("OK"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("OK")))
 
         // Simulate an authenticated API call
         let url = server.url(forPath: "/api/me")

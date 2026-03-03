@@ -18,7 +18,7 @@ import Testing
         try server.start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("Hello"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello")))
 
         let url = server.url(forPath: "/test")
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -33,7 +33,7 @@ import Testing
         try server.start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 404).withBody("Not Found"))
+        server.enqueue(MockResponse(statusCode: 404).withBody(.text("Not Found")))
 
         let url = server.url(forPath: "/missing")
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -50,8 +50,7 @@ import Testing
 
         server.enqueue(
             MockResponse(statusCode: 200)
-                .withBody("{}")
-                .withHeader("Content-Type", "application/json")
+                .withBody(.json("{}"))
         )
 
         let url = server.url(forPath: "/api")
@@ -130,9 +129,9 @@ import Testing
         try server.start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("first"))
-        server.enqueue(MockResponse(statusCode: 201).withBody("second"))
-        server.enqueue(MockResponse(statusCode: 202).withBody("third"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("first")))
+        server.enqueue(MockResponse(statusCode: 201).withBody(.text("second")))
+        server.enqueue(MockResponse(statusCode: 202).withBody(.text("third")))
 
         let session = URLSession(configuration: .ephemeral)
 
@@ -150,7 +149,7 @@ import Testing
         try server.start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("ok"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("ok")))
 
         let url = server.url(forPath: "/submit")
         var request = URLRequest(url: url)
@@ -467,7 +466,7 @@ import Testing
         defer { server.shutdown() }
 
         let body = String(repeating: "x", count: 500)
-        server.enqueue(MockResponse(statusCode: 200).withBody(body).withThrottle(bytesPerSecond: 65536))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text(body)).withThrottle(bytesPerSecond: 65536))
 
         let session = URLSession(configuration: .ephemeral)
         let (data, resp) = try await session.data(from: server.url(forPath: "/throttled"))
@@ -527,7 +526,7 @@ import Testing
             capturedPort = server.port
             #expect(capturedPort > 0)
 
-            server.enqueue(MockResponse(statusCode: 200).withBody("scoped"))
+            server.enqueue(MockResponse(statusCode: 200).withBody(.text("scoped")))
             let (data, response) = try await URLSession.shared.data(from: server.url(forPath: "/test"))
             let http = try #require(response as? HTTPURLResponse)
             #expect(http.statusCode == 200)

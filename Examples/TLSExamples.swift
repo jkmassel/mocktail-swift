@@ -20,7 +20,7 @@ import MockWebServer
         try server.start(tls: tls)
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("Secure response"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("Secure response")))
 
         let url = server.url(forPath: "/api/data")
         #expect(url.scheme == "https")
@@ -44,7 +44,7 @@ import MockWebServer
         try server.start() // plain HTTP, no TLS
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("Hello"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello")))
 
         // Construct an HTTPS URL pointing at the plain HTTP server
         let httpsURL = URL(string: "https://127.0.0.1:\(server.port)/api/data")!

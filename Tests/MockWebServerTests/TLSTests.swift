@@ -37,7 +37,7 @@ import Testing
         try server.start(tls: tls)
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("secure"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("secure")))
 
         // URLSession will reject self-signed certs by default
         let url = server.url(forPath: "/secure")
@@ -55,7 +55,7 @@ import Testing
         try server.start() // plain HTTP
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("Hello"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello")))
 
         // Try to connect via HTTPS to a plain HTTP server
         let httpsURL = URL(string: "https://127.0.0.1:\(server.port)/test")!

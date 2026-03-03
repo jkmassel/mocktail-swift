@@ -41,9 +41,26 @@ public struct MockResponse: Sendable {
         self.throttleRate = throttleRate
     }
 
+    @available(*, deprecated, message: "Use withBody(_: ResponseBody) instead, e.g. .withBody(.text(\"...\")). Note: the new overload also sets the Content-Type header automatically.")
     public func withBody(_ body: String) -> MockResponse {
         var copy = self
         copy.body = Data(body.utf8)
+        return copy
+    }
+
+    /// Returns a copy with the given typed body and its matching `Content-Type` header.
+    ///
+    /// Any existing `Content-Type` header is replaced (not duplicated).
+    ///
+    /// ```swift
+    /// MockResponse(statusCode: 503)
+    ///     .withBody(.json(#"{"error": "maintenance"}"#))
+    /// ```
+    public func withBody(_ body: ResponseBody) -> MockResponse {
+        var copy = self
+        copy.body = body.contentData
+        copy.headers.removeAll { $0.0.lowercased() == "content-type" }
+        copy.headers.append(("Content-Type", body.contentType))
         return copy
     }
 
@@ -79,6 +96,30 @@ public struct MockResponse: Sendable {
     /// so it should be an absolute path like `"/api/v2/thing"` or a full URL.
     public static func redirect(to path: String, type: RedirectType = .temporary) -> MockResponse {
         MockResponse(statusCode: type.statusCode, headers: [("Location", path)])
+    }
+
+    /// Creates a 429 Too Many Requests response with a `Retry-After` header.
+    ///
+    /// Use this to test how your code handles rate-limiting from an API.
+    /// The `retryAfter` value is sent as an integer number of seconds,
+    /// matching the HTTP `Retry-After` header format.
+    ///
+    /// ```swift
+    /// // Plain text (default)
+    /// server.enqueue(.rateLimited(retryAfter: 30))
+    ///
+    /// // JSON error body
+    /// server.enqueue(.rateLimited(retryAfter: 30, body: .json(#"{"error": "rate_limited"}"#)))
+    /// ```
+    public static func rateLimited(retryAfter: UInt, body: ResponseBody = .text("Too Many Requests")) -> MockResponse {
+        MockResponse(
+            statusCode: 429,
+            headers: [
+                ("Retry-After", "\(retryAfter)"),
+                ("Content-Type", body.contentType),
+            ],
+            body: body.contentData
+        )
     }
 
     public static func json(_ body: String, statusCode: Int = 200) -> MockResponse {
@@ -164,6 +205,48 @@ public enum RedirectType: Sendable {
         case .temporary: 302
         case .temporaryPreservingMethod: 307
         case .permanentPreservingMethod: 308
+        }
+    }
+}
+
+/// A response body with an associated content type.
+///
+/// Use with ``MockResponse/withBody(_:)-swift.method`` or
+/// ``MockResponse/rateLimited(retryAfter:body:)`` to set the body
+/// and `Content-Type` header together.
+public enum ResponseBody: Sendable {
+    /// A JSON body (`application/json`).
+    case json(String)
+    /// An HTML body (`text/html; charset=utf-8`).
+    case html(String)
+    /// A plain text body (`text/plain; charset=utf-8`).
+    case text(String)
+    /// A binary body with an explicit content type.
+    case data(Data, contentType: String)
+
+    /// The body content as `Data`.
+    public var contentData: Data {
+        switch self {
+        case .json(let s), .html(let s), .text(let s): Data(s.utf8)
+        case .data(let d, _): d
+        }
+    }
+
+    /// The content string for this body, or an empty string for binary data.
+    public var content: String {
+        switch self {
+        case .json(let s), .html(let s), .text(let s): s
+        case .data(let d, _): String(data: d, encoding: .utf8) ?? ""
+        }
+    }
+
+    /// The `Content-Type` header value for this body type.
+    public var contentType: String {
+        switch self {
+        case .json: "application/json"
+        case .html: "text/html; charset=utf-8"
+        case .text: "text/plain; charset=utf-8"
+        case .data(_, let ct): ct
         }
     }
 }

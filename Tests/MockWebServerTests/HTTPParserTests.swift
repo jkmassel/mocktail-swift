@@ -45,7 +45,7 @@ import Testing
     }
 
     @Test func serializeBasicResponse() throws {
-        let response = MockResponse(statusCode: 200).withBody("OK")
+        let response = MockResponse(statusCode: 200).withBody(.text("OK"))
         let data = HTTPParser.serializeResponse(response)
         let string = try #require(String(data: data, encoding: .utf8))
 
@@ -58,7 +58,7 @@ import Testing
     @Test func serializeResponseWithCustomHeaders() throws {
         let response = MockResponse(statusCode: 201)
             .withHeader("X-Foo", "bar")
-            .withBody("created")
+            .withBody(.text("created"))
         let data = HTTPParser.serializeResponse(response)
         let string = try #require(String(data: data, encoding: .utf8))
 

@@ -17,7 +17,7 @@ import MockWebServer
         try server.start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("Hello, world!"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello, world!")))
 
         let url = server.url(forPath: "/greeting")
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -210,9 +210,9 @@ import MockWebServer
         try server.start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 401).withBody("Unauthorized"))
-        server.enqueue(MockResponse(statusCode: 404).withBody("Not Found"))
-        server.enqueue(MockResponse(statusCode: 500).withBody("Internal Server Error"))
+        server.enqueue(MockResponse(statusCode: 401).withBody(.text("Unauthorized")))
+        server.enqueue(MockResponse(statusCode: 404).withBody(.text("Not Found")))
+        server.enqueue(MockResponse(statusCode: 500).withBody(.text("Internal Server Error")))
 
         let session = URLSession(configuration: .ephemeral)
 

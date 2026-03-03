@@ -73,7 +73,7 @@ import MockWebServer
         let body = String(repeating: "x", count: 500)
         server.enqueue(
             MockResponse(statusCode: 200)
-                .withBody(body)
+                .withBody(.text(body))
                 .withThrottle(bytesPerSecond: 65536)
         )
 
@@ -94,7 +94,7 @@ import MockWebServer
 
         server.enqueue(
             MockResponse(statusCode: 200)
-                .withBody("Finally!")
+                .withBody(.text("Finally!"))
                 .withBodyDelay(.milliseconds(500))
         )
 

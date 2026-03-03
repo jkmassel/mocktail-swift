@@ -14,7 +14,7 @@ public enum MockWebServerError: Error {
 /// Unlike URL protocol stubs that intercept requests before they hit the network,
 /// `MockWebServer` opens a real socket on localhost. This lets you test scenarios
 /// that require actual TCP connections: TLS handshake failures, expired certificates,
-/// connection drops, and timeouts.
+/// connection drops, timeouts, and rate limiting.
 ///
 /// Routes handle matching requests; unmatched requests consume the next enqueued response.
 public final class MockWebServer: @unchecked Sendable {
@@ -69,15 +69,15 @@ public final class MockWebServer: @unchecked Sendable {
     private static let startLock = NSLock()
 
     /// Start listening on a random available port.
+    /// - Returns: `self`, so you can write `let server = try MockWebServer().start()`.
     /// - Throws: ``MockWebServerError`` if the listener fails to start or times out.
-    public func start(tls: TLSConfiguration? = nil) throws {
+    @discardableResult
+    public func start(tls: TLSConfiguration? = nil) throws -> MockWebServer {
         let params: NWParameters
         if let tls {
             params = tls.parameters
-            useTLS = true
         } else {
             params = .tcp
-            useTLS = false
         }
 
         // Hold the process-wide lock so only one listener initializes at a time.
@@ -119,7 +119,10 @@ public final class MockWebServer: @unchecked Sendable {
         lock.withLock {
             self.listener = listener
             self._port = listener.port?.rawValue ?? 0
+            self.useTLS = tls != nil
         }
+
+        return self
     }
 
     /// Add a response that will be returned for the next unmatched request.
@@ -176,16 +179,29 @@ public final class MockWebServer: @unchecked Sendable {
     ///
     /// `URLSession` follows the redirect automatically, so the caller receives `then` directly.
     public func enqueueRedirect(to path: String, type: RedirectType = .temporary, then response: MockResponse) {
-        enqueue(.redirect(to: path, type: type))
-        enqueue(response)
+        enqueueAll(.redirect(to: path, type: type), response)
+    }
+
+    /// Enqueue a 429 rate-limited response followed by a subsequent response.
+    ///
+    /// This is a convenience that enqueues two responses atomically: a 429 with the given
+    /// `Retry-After` header, then `response`. Your client code is responsible for
+    /// reading the `Retry-After` header and retrying — `URLSession` does not
+    /// retry 429s automatically (unlike redirects).
+    public func enqueueRateLimited(retryAfter: UInt, body: ResponseBody = .text("Too Many Requests"), then response: MockResponse) {
+        enqueueAll(.rateLimited(retryAfter: retryAfter, body: body), response)
+    }
+
+    private func enqueueAll(_ responses: MockResponse...) {
+        lock.withLock { responseQueue.append(contentsOf: responses) }
     }
 
     /// Returns a URL for the given path on this server (e.g. `http://127.0.0.1:{port}/path`).
     ///
     /// The scheme is `https` if the server was started with a ``TLSConfiguration``, otherwise `http`.
     public func url(forPath path: String) -> URL {
-        let scheme = useTLS ? "https" : "http"
-        return URL(string: "\(scheme)://127.0.0.1:\(port)\(path)")!
+        let (scheme, currentPort) = lock.withLock { (useTLS ? "https" : "http", _port) }
+        return URL(string: "\(scheme)://127.0.0.1:\(currentPort)\(path)")!
     }
 
     /// Wait for and return the next recorded request.
@@ -241,6 +257,7 @@ public final class MockWebServer: @unchecked Sendable {
         hitCounts = [:]
         recordedRequests = []
         _port = 0
+        useTLS = false
         lock.unlock()
 
         for waiter in currentWaiters {
