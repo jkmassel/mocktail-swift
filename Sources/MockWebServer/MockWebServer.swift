@@ -48,7 +48,7 @@ public final class MockWebServer: @unchecked Sendable {
         _ body: (MockWebServer) async throws -> T
     ) async throws -> T {
         let server = MockWebServer()
-        try server.start(tls: tls)
+        try await server.start(tls: tls)
         defer { server.shutdown() }
         return try await body(server)
     }
@@ -62,13 +62,18 @@ public final class MockWebServer: @unchecked Sendable {
         lock.withLock { recordedRequests.count }
     }
 
-    // NWListener.start() is fast individually but degrades when many listeners
-    // initialize concurrently (common in parallel test suites). On the iOS
-    // Simulator the network virtualization layer is the bottleneck. Serializing
-    // starts eliminates the contention.
-    private static let startLock = NSLock()
+    // NWListener.start() degrades when many listeners initialize concurrently
+    // (common in parallel test suites on the iOS Simulator). This serial queue
+    // ensures only one listener starts at a time, and the async start() overload
+    // dispatches here so blocking never occupies a cooperative thread.
+    private static let startQueue = DispatchQueue(label: "com.mockwebserver.start")
 
     /// Start listening on a random available port.
+    ///
+    /// Prefer the async overload ``start(tls:)-async`` when calling from
+    /// an `async` context (e.g. Swift Testing `@Test` functions) to avoid
+    /// blocking a cooperative thread.
+    ///
     /// - Returns: `self`, so you can write `let server = try MockWebServer().start()`.
     /// - Throws: ``MockWebServerError`` if the listener fails to start or times out.
     @discardableResult
@@ -80,10 +85,43 @@ public final class MockWebServer: @unchecked Sendable {
             params = .tcp
         }
 
-        // Hold the process-wide lock so only one listener initializes at a time.
-        Self.startLock.lock()
-        defer { Self.startLock.unlock() }
+        let listener = try startListener(params: params)
+        configureAfterStart(listener: listener, tls: tls)
+        return self
+    }
 
+    /// Start listening on a random available port (async version).
+    ///
+    /// This overload moves all blocking work (lock acquisition and listener
+    /// startup) off the Swift Concurrency cooperative thread pool, preventing
+    /// deadlocks when many async tests start servers concurrently.
+    ///
+    /// - Returns: `self`, so you can write `let server = try await MockWebServer().start()`.
+    /// - Throws: ``MockWebServerError`` if the listener fails to start or times out.
+    @discardableResult
+    public func start(tls: TLSConfiguration? = nil) async throws -> MockWebServer {
+        let params: NWParameters
+        if let tls {
+            params = tls.parameters
+        } else {
+            params = .tcp
+        }
+
+        let listener = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<NWListener, any Error>) in
+            Self.startQueue.async {
+                do {
+                    let listener = try self.startListener(params: params)
+                    continuation.resume(returning: listener)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        configureAfterStart(listener: listener, tls: tls)
+        return self
+    }
+
+    private func startListener(params: NWParameters) throws -> NWListener {
         let listener = try NWListener(using: params, on: .any)
 
         let semaphore = DispatchSemaphore(value: 0)
@@ -116,13 +154,15 @@ public final class MockWebServer: @unchecked Sendable {
             throw MockWebServerError.startFailed(error)
         }
 
+        return listener
+    }
+
+    private func configureAfterStart(listener: NWListener, tls: TLSConfiguration?) {
         lock.withLock {
             self.listener = listener
             self._port = listener.port?.rawValue ?? 0
             self.useTLS = tls != nil
         }
-
-        return self
     }
 
     /// Add a response that will be returned for the next unmatched request.
