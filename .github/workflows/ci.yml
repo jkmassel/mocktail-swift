@@ -26,3 +26,15 @@ jobs:
         run: xcodebuild -resolvePackageDependencies -scheme MockWebServer -destination 'platform=iOS Simulator,name=iPhone 16'
       - name: Build and test
         run: xcodebuild test -scheme MockWebServer -destination 'platform=iOS Simulator,name=iPhone 16'
+
+  docs:
+    name: Build DocC
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build documentation
+        run: |
+          swift package generate-documentation \
+            --target MockWebServer \
+            --transform-for-static-hosting \
+            --hosting-base-path mocktail-swift

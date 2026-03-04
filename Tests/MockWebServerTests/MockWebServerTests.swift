@@ -7,18 +7,16 @@ import Testing
     // MARK: - Phase 1: Plain HTTP
 
     @Test func startAndShutdown() throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try MockWebServer().start()
         #expect(server.port > 0)
         server.shutdown()
     }
 
     @Test func simpleGetRequest() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("Hello"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello")))
 
         let url = server.url(forPath: "/test")
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -29,11 +27,10 @@ import Testing
     }
 
     @Test func customStatusCode() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 404).withBody("Not Found"))
+        server.enqueue(MockResponse(statusCode: 404).withBody(.text("Not Found")))
 
         let url = server.url(forPath: "/missing")
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -44,14 +41,12 @@ import Testing
     }
 
     @Test func customHeaders() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(
             MockResponse(statusCode: 200)
-                .withBody("{}")
-                .withHeader("Content-Type", "application/json")
+                .withBody(.json("{}"))
         )
 
         let url = server.url(forPath: "/api")
@@ -62,8 +57,7 @@ import Testing
     }
 
     @Test func jsonHelper() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.json(#"{"ok": true}"#))
@@ -78,8 +72,7 @@ import Testing
     }
 
     @Test func htmlHelper() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.html("<p>hi</p>"))
@@ -94,8 +87,7 @@ import Testing
     }
 
     @Test func textHelper() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.text("hello"))
@@ -110,8 +102,7 @@ import Testing
     }
 
     @Test func jsonHelperWithCustomStatus() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.json(#"{"error": "not found"}"#, statusCode: 404))
@@ -126,13 +117,12 @@ import Testing
     }
 
     @Test func multipleEnqueuedResponses() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("first"))
-        server.enqueue(MockResponse(statusCode: 201).withBody("second"))
-        server.enqueue(MockResponse(statusCode: 202).withBody("third"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("first")))
+        server.enqueue(MockResponse(statusCode: 201).withBody(.text("second")))
+        server.enqueue(MockResponse(statusCode: 202).withBody(.text("third")))
 
         let session = URLSession(configuration: .ephemeral)
 
@@ -146,11 +136,10 @@ import Testing
     }
 
     @Test func postRequestWithBody() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("ok"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("ok")))
 
         let url = server.url(forPath: "/submit")
         var request = URLRequest(url: url)
@@ -165,8 +154,7 @@ import Testing
     }
 
     @Test func urlBuildsCorrectly() throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try MockWebServer().start()
         defer { server.shutdown() }
 
         let url = server.url(forPath: "/api/v2/users")
@@ -179,8 +167,7 @@ import Testing
     // MARK: - Phase 2: Request Recording + Socket Policies
 
     @Test func takeRequestRecordsMethod() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200))
@@ -195,8 +182,7 @@ import Testing
     }
 
     @Test func takeRequestRecordsPostBody() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200))
@@ -215,8 +201,7 @@ import Testing
     }
 
     @Test func takeRequestFIFOOrder() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200))
@@ -238,8 +223,7 @@ import Testing
     }
 
     @Test func requestCount() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         #expect(server.requestCount == 0)
@@ -257,8 +241,7 @@ import Testing
     }
 
     @Test func takeRequestTimesOut() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         let result = await server.takeRequest(timeout: .milliseconds(200))
@@ -266,8 +249,7 @@ import Testing
     }
 
     @Test func disconnectImmediately() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse().withSocketPolicy(.disconnectImmediately))
@@ -292,8 +274,7 @@ import Testing
     // MARK: - Path-based routing
 
     @Test func routeReturnsPersistentResponse() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/", .html("<h1>Home</h1>"))
@@ -323,8 +304,7 @@ import Testing
     }
 
     @Test func routeTakesPriorityOverQueue() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/api", .json(#"{"routed": true}"#))
@@ -342,8 +322,7 @@ import Testing
     }
 
     @Test func unmatchedPathFallsBackToQueue() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/known", .text("known"))
@@ -358,8 +337,7 @@ import Testing
     // MARK: - Closure routes
 
     @Test func closureRouteReceivesRequest() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/api/test") { request in
@@ -377,8 +355,7 @@ import Testing
     }
 
     @Test func closureMethodRouteMatchesCorrectMethod() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("GET", "/items") { _ in .json(#"{"action": "list"}"#) }
@@ -399,8 +376,7 @@ import Testing
     // MARK: - Method-aware routing
 
     @Test func methodSpecificRouteMatchesCorrectMethod() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("GET", "/users", .json(#"[{"id": 1}]"#))
@@ -419,8 +395,7 @@ import Testing
     }
 
     @Test func methodRouteTakesPriorityOverCatchAll() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("POST", "/data", .json(#"{"method": "post"}"#, statusCode: 201))
@@ -440,8 +415,7 @@ import Testing
     }
 
     @Test func multipleMethodsOnSamePath() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("GET", "/resource", .json(#"{"action": "read"}"#))
@@ -462,12 +436,11 @@ import Testing
     // MARK: - Response throttling
 
     @Test func throttledResponseDelivered() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         let body = String(repeating: "x", count: 500)
-        server.enqueue(MockResponse(statusCode: 200).withBody(body).withThrottle(bytesPerSecond: 65536))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text(body)).withThrottle(bytesPerSecond: 65536))
 
         let session = URLSession(configuration: .ephemeral)
         let (data, resp) = try await session.data(from: server.url(forPath: "/throttled"))
@@ -479,8 +452,7 @@ import Testing
     // MARK: - Route hit counting
 
     @Test func routeHitCountTracksRequests() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/api/health", .json(#"{"status": "ok"}"#))
@@ -494,16 +466,14 @@ import Testing
     }
 
     @Test func routeHitCountForUnknownPath() throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try MockWebServer().start()
         defer { server.shutdown() }
 
         #expect(server.routeHitCount(forPath: "/unknown") == 0)
     }
 
     @Test func routeHitCountTracksQueuedResponses() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.text("a"))
@@ -527,7 +497,7 @@ import Testing
             capturedPort = server.port
             #expect(capturedPort > 0)
 
-            server.enqueue(MockResponse(statusCode: 200).withBody("scoped"))
+            server.enqueue(MockResponse(statusCode: 200).withBody(.text("scoped")))
             let (data, response) = try await URLSession.shared.data(from: server.url(forPath: "/test"))
             let http = try #require(response as? HTTPURLResponse)
             #expect(http.statusCode == 200)
@@ -538,8 +508,7 @@ import Testing
     }
 
     @Test func noResponse() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse().withSocketPolicy(.noResponse))

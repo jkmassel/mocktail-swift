@@ -11,8 +11,7 @@ import MockWebServer
 
     /// Register different responses for GET and POST on the same path.
     @Test func restfulResource() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("GET", "/api/users", .json(#"[{"id": 1, "name": "Alice"}]"#))
@@ -42,8 +41,7 @@ import MockWebServer
 
     /// Method-specific routes take priority over catch-all routes on the same path.
     @Test func methodRouteOverridesCatchAll() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         // Catch-all for /data

@@ -13,11 +13,10 @@ import MockWebServer
 
     /// Use takeRequest() to inspect exactly what was sent.
     @Test func verifyAuthorizationHeader() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
-        server.enqueue(MockResponse(statusCode: 200).withBody("OK"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("OK")))
 
         // Simulate an authenticated API call
         let url = server.url(forPath: "/api/me")
@@ -40,8 +39,7 @@ import MockWebServer
     /// takeRequest() returns requests in FIFO order, so you can verify
     /// that your code makes calls in the expected sequence.
     @Test func verifyCallOrder() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200))
@@ -69,8 +67,7 @@ import MockWebServer
     /// takeRequest() waits asynchronously if no request has arrived yet.
     /// It returns nil after the timeout expires.
     @Test func takeRequestWithTimeout() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         // No request will arrive, so this should time out
