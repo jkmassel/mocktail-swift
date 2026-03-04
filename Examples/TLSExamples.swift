@@ -8,7 +8,7 @@ import Foundation
 import Testing
 import MockWebServer
 
-@Suite(.serialized) struct TLSExamples {
+@Suite struct TLSExamples {
 
     // MARK: - HTTPS with self-signed certificate
 
