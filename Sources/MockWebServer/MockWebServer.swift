@@ -18,9 +18,14 @@ public enum MockWebServerError: Error {
 ///
 /// Routes handle matching requests; unmatched requests consume the next enqueued response.
 public final class MockWebServer: @unchecked Sendable {
+    private struct EnqueuedResponse {
+        let response: MockResponse
+        let requiresBasicAuth: Bool
+    }
+
     private let lock = NSLock()
     private var listener: NWListener?
-    private var responseQueue: [MockResponse] = []
+    private var responseQueue: [EnqueuedResponse] = []
     private var methodRoutes: [String: [String: @Sendable (RecordedRequest) -> MockResponse]] = [:]
     private var catchAllRoutes: [String: @Sendable (RecordedRequest) -> MockResponse] = [:]
     private var hitCounts: [String: Int] = [:]
@@ -179,7 +184,27 @@ public final class MockWebServer: @unchecked Sendable {
     /// Enqueued responses are consumed in order, one per request. If no responses
     /// remain and no route matches, the server returns a 500.
     public func enqueue(_ response: MockResponse) {
-        lock.withLock { responseQueue.append(response) }
+        lock.withLock { responseQueue.append(EnqueuedResponse(response: response, requiresBasicAuth: false)) }
+    }
+
+    /// Enqueue a Basic auth challenge that persists until credentials arrive,
+    /// followed by the response to return once authenticated.
+    ///
+    /// Unauthenticated requests (or requests using a non-Basic scheme like Bearer)
+    /// always receive `challenge`. The first request with a `Basic` `Authorization`
+    /// header consumes both and receives `then`.
+    ///
+    /// ```swift
+    /// server.enqueueAuthChallenge(
+    ///     .basicAuthChallenge(realm: "API"),
+    ///     then: .json(#"{"authenticated": true}"#)
+    /// )
+    /// ```
+    public func enqueueAuthChallenge(_ challenge: MockResponse, then response: MockResponse) {
+        lock.withLock {
+            responseQueue.append(EnqueuedResponse(response: challenge, requiresBasicAuth: true))
+            responseQueue.append(EnqueuedResponse(response: response, requiresBasicAuth: false))
+        }
     }
 
     /// Register a persistent response for a path, matching any HTTP method.
@@ -242,7 +267,7 @@ public final class MockWebServer: @unchecked Sendable {
     }
 
     private func enqueueAll(_ responses: MockResponse...) {
-        lock.withLock { responseQueue.append(contentsOf: responses) }
+        lock.withLock { responseQueue.append(contentsOf: responses.map { EnqueuedResponse(response: $0, requiresBasicAuth: false) }) }
     }
 
     /// Returns a URL for the given path on this server (e.g. `http://127.0.0.1:{port}/path`).
@@ -358,8 +383,13 @@ public final class MockWebServer: @unchecked Sendable {
     // MARK: - Private
 
     private func handleNewConnection(_ connection: NWConnection) {
-        // Check if the next response requires early connection handling
-        let nextPolicy: SocketPolicy? = lock.withLock { responseQueue.first?.socketPolicy }
+        // Check if the next response requires early connection handling.
+        // Skip the peek when the front of the queue requires Basic auth —
+        // we need to parse the request first to check for credentials.
+        let nextPolicy: SocketPolicy? = lock.withLock {
+            guard let first = responseQueue.first, !first.requiresBasicAuth else { return nil }
+            return first.response.socketPolicy
+        }
 
         if nextPolicy == .disconnectImmediately {
             _ = lock.withLock { responseQueue.isEmpty ? nil : responseQueue.removeFirst() }
@@ -415,7 +445,27 @@ public final class MockWebServer: @unchecked Sendable {
             if responseQueue.isEmpty {
                 return MockResponse(statusCode: 500)
             }
-            return responseQueue.removeFirst()
+
+            let enqueued = responseQueue[0]
+
+            // Auth-challenge responses (enqueued via enqueueAuthChallenge) persist
+            // until a request with Basic credentials arrives. Non-Basic schemes
+            // (e.g. Bearer) do not satisfy the check.
+            if enqueued.requiresBasicAuth {
+                let hasBasicAuth = request.headers.contains {
+                    $0.0.lowercased() == "authorization" && $0.1.lowercased().hasPrefix("basic ")
+                }
+                if !hasBasicAuth {
+                    return enqueued.response
+                }
+                responseQueue.removeFirst()
+                if responseQueue.isEmpty {
+                    return MockResponse(statusCode: 500)
+                }
+                return responseQueue.removeFirst().response
+            }
+
+            return responseQueue.removeFirst().response
         }
     }
 
