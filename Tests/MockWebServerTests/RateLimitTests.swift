@@ -138,8 +138,7 @@ import Testing
     // MARK: - enqueueRateLimited convenience (integration)
 
     @Test func enqueueRateLimitedServesTwo() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueueRateLimited(retryAfter: 1, then: .json(#"{"ok": true}"#))
@@ -166,8 +165,7 @@ import Testing
     }
 
     @Test func rateLimitedResponseRetryAfterHeaderOverNetwork() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.rateLimited(retryAfter: 120, body: .json(#"{"error": "slow_down"}"#)))
@@ -211,8 +209,7 @@ import Testing
     }
 
     @Test func withBodyDataCaseOverNetwork() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         let binaryData = Data([0x00, 0x01, 0x02, 0xFF])
@@ -233,8 +230,7 @@ import Testing
     // MARK: - enqueueRateLimited with custom body
 
     @Test func enqueueRateLimitedWithCustomBody() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueueRateLimited(

@@ -15,9 +15,8 @@ import MockWebServer
     /// Start the server with a self-signed localhost certificate.
     /// Use a custom URLSessionDelegate to trust the cert.
     @Test func httpsWithSelfSignedCert() async throws {
-        let server = MockWebServer()
         let tls = try TLSConfiguration.localhost()
-        try server.start(tls: tls)
+        let server = try await MockWebServer().start(tls: tls)
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200).withBody(.text("Secure response")))
@@ -40,8 +39,7 @@ import MockWebServer
     /// Test that your code handles the case where it tries to connect
     /// via HTTPS to a server that only speaks HTTP.
     @Test func httpsToHTTPOnly() async throws {
-        let server = MockWebServer()
-        try server.start() // plain HTTP, no TLS
+        let server = try await MockWebServer().start() // plain HTTP, no TLS
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello")))
@@ -66,9 +64,8 @@ import MockWebServer
 
     /// Test that URLSession rejects an expired server certificate.
     @Test func expiredCertificate() async throws {
-        let server = MockWebServer()
         let tls = try TLSConfiguration.expired()
-        try server.start(tls: tls)
+        let server = try await MockWebServer().start(tls: tls)
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200))
@@ -90,9 +87,8 @@ import MockWebServer
 
     /// Test that URLSession rejects a certificate whose hostname doesn't match.
     @Test func wrongHostnameCertificate() async throws {
-        let server = MockWebServer()
         let tls = try TLSConfiguration.wrongHostname()
-        try server.start(tls: tls)
+        let server = try await MockWebServer().start(tls: tls)
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200))

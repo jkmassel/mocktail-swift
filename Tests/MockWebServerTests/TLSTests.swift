@@ -20,9 +20,8 @@ import Testing
     }
 
     @Test func httpsServerStartsWithValidCert() async throws {
-        let server = MockWebServer()
         let tls = try TLSConfiguration.localhost()
-        try server.start(tls: tls)
+        let server = try await MockWebServer().start(tls: tls)
         defer { server.shutdown() }
 
         #expect(server.port > 0)
@@ -32,9 +31,8 @@ import Testing
     }
 
     @Test func httpsRequestWithSelfSignedCert() async throws {
-        let server = MockWebServer()
         let tls = try TLSConfiguration.localhost()
-        try server.start(tls: tls)
+        let server = try await MockWebServer().start(tls: tls)
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200).withBody(.text("secure")))
@@ -51,8 +49,7 @@ import Testing
     }
 
     @Test func httpsToPlainHTTPServer() async throws {
-        let server = MockWebServer()
-        try server.start() // plain HTTP
+        let server = try await MockWebServer().start() // plain HTTP
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello")))

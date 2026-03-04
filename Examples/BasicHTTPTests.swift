@@ -13,8 +13,7 @@ import MockWebServer
 
     /// The most basic usage: enqueue a response, make a request, check the result.
     @Test func getRequest() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello, world!")))
@@ -31,8 +30,7 @@ import MockWebServer
 
     /// Use .json() and .html() to create responses with the right Content-Type.
     @Test func staticContentHelpers() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         // .json() sets Content-Type: application/json automatically
@@ -47,8 +45,7 @@ import MockWebServer
     }
 
     @Test func htmlResponse() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         // .html() sets Content-Type: text/html; charset=utf-8
@@ -73,8 +70,7 @@ import MockWebServer
     /// Enqueue a response, send a POST with a JSON body, then verify
     /// both the response and the recorded request.
     @Test func postJSON() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.json(#"{"id": 42}"#, statusCode: 201))
@@ -102,8 +98,7 @@ import MockWebServer
 
     /// Enqueue several responses to simulate a multi-step API flow.
     @Test func paginatedAPI() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.json(#"{"items": [1,2,3], "next": "/api/items?page=2"}"#))
@@ -127,8 +122,7 @@ import MockWebServer
     /// Use enqueueRedirect(to:then:) to set up a redirect followed by a JSON response.
     /// URLSession follows redirects automatically, so it hits the server twice.
     @Test func redirectToJSON() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         let json = #"{"users": [{"id": 1, "name": "Alice"}]}"#
@@ -158,8 +152,7 @@ import MockWebServer
     /// Use route() to register persistent responses for specific paths.
     /// Unlike enqueue(), routes are never consumed and serve every matching request.
     @Test func pathBasedRouting() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/", .html("<h1>Welcome</h1>"))
@@ -187,8 +180,7 @@ import MockWebServer
 
     /// Use routeHitCount(forPath:) to verify how many times a path was requested.
     @Test func routeHitCounting() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/api/health", .json(#"{"status": "ok"}"#))
@@ -206,8 +198,7 @@ import MockWebServer
 
     /// Test how your code handles various HTTP error codes.
     @Test func errorHandling() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse(statusCode: 401).withBody(.text("Unauthorized")))

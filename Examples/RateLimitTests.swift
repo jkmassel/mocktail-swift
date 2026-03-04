@@ -15,8 +15,7 @@ import MockWebServer
     /// The simplest rate-limit test: enqueue a 429, verify the status code
     /// and Retry-After header your client receives.
     @Test func simpleRateLimitResponse() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(.rateLimited(retryAfter: 30))
@@ -34,8 +33,7 @@ import MockWebServer
     /// Use the body parameter to return a JSON error when rate-limited.
     /// This is common with REST APIs that include machine-readable error details.
     @Test func rateLimitWithJSONBody() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         let errorBody = #"{"error": "rate_limited", "retry_after": 60}"#
@@ -57,8 +55,7 @@ import MockWebServer
     /// by a success response. Your client code must handle the retry itself
     /// (unlike redirects, URLSession does not retry 429s automatically).
     @Test func rateLimitThenSuccess() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueueRateLimited(
@@ -90,8 +87,7 @@ import MockWebServer
     /// Use this pattern to test clients that retry multiple times before
     /// the server allows the request through.
     @Test func multipleRateLimitsBeforeSuccess() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         // Server rate-limits twice before succeeding
@@ -128,8 +124,7 @@ import MockWebServer
     /// Use a closure route with routeHitCount to build a dynamic rate limiter
     /// that returns 429 for the first N requests, then succeeds.
     @Test func dynamicRateLimiterWithClosureRoute() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/api/limited") { _ in
@@ -166,8 +161,7 @@ import MockWebServer
     /// Use takeRequest() to verify your client retried correctly —
     /// same path, same method, same headers, and same body on each attempt.
     @Test func verifyRetryRequests() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueueRateLimited(retryAfter: 1, then: .json(#"{"ok": true}"#))

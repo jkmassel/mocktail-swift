@@ -53,8 +53,7 @@ import MockWebServer
 The server starts automatically and shuts down when the closure returns. You can also manage the lifecycle manually:
 
 ```swift
-let server = MockWebServer()
-try server.start()
+let server = try await MockWebServer().start()
 defer { server.shutdown() }
 ```
 
