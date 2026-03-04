@@ -5,7 +5,7 @@ import Network
 public enum MockWebServerError: Error {
     /// The server's network listener failed to start.
     case startFailed(NWError)
-    /// The server did not become ready within the 5-second timeout.
+    /// The server did not become ready within the startup timeout.
     case startTimedOut
 }
 
@@ -30,6 +30,7 @@ public final class MockWebServer: @unchecked Sendable {
     private let dispatchQueue = DispatchQueue(label: "com.mockwebserver")
     private var _port: UInt16 = 0
     private var useTLS = false
+    private var pooledListener: ListenerPool.PooledListener?
 
     public init() {}
 
@@ -62,12 +63,6 @@ public final class MockWebServer: @unchecked Sendable {
         lock.withLock { recordedRequests.count }
     }
 
-    // NWListener.start() degrades when many listeners initialize concurrently
-    // (common in parallel test suites on the iOS Simulator). This serial queue
-    // ensures only one listener starts at a time, and the async start() overload
-    // dispatches here so blocking never occupies a cooperative thread.
-    private static let startQueue = DispatchQueue(label: "com.mockwebserver.start")
-
     /// Start listening on a random available port.
     ///
     /// Prefer the async overload ``start(tls:)-async`` when calling from
@@ -78,49 +73,52 @@ public final class MockWebServer: @unchecked Sendable {
     /// - Throws: ``MockWebServerError`` if the listener fails to start or times out.
     @discardableResult
     public func start(tls: TLSConfiguration? = nil) throws -> MockWebServer {
-        let params: NWParameters
         if let tls {
-            params = tls.parameters
+            let listener = try startListener(params: tls.parameters)
+            configureAfterStart(listener: listener, tls: tls)
         } else {
-            params = .tcp
+            let pooled = ListenerPool.shared.checkout()
+            configurePooledListener(pooled)
         }
-
-        let listener = try startListener(params: params)
-        configureAfterStart(listener: listener, tls: tls)
         return self
     }
 
     /// Start listening on a random available port (async version).
     ///
-    /// This overload moves all blocking work (lock acquisition and listener
-    /// startup) off the Swift Concurrency cooperative thread pool, preventing
-    /// deadlocks when many async tests start servers concurrently.
+    /// This overload moves blocking work off the Swift Concurrency cooperative
+    /// thread pool, preventing deadlocks when many async tests start servers
+    /// concurrently.
     ///
     /// - Returns: `self`, so you can write `let server = try await MockWebServer().start()`.
     /// - Throws: ``MockWebServerError`` if the listener fails to start or times out.
     @discardableResult
     public func start(tls: TLSConfiguration? = nil) async throws -> MockWebServer {
-        let params: NWParameters
         if let tls {
-            params = tls.parameters
-        } else {
-            params = .tcp
-        }
-
-        let listener = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<NWListener, any Error>) in
-            Self.startQueue.async {
-                do {
-                    let listener = try self.startListener(params: params)
-                    continuation.resume(returning: listener)
-                } catch {
-                    continuation.resume(throwing: error)
+            let listener = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<NWListener, any Error>) in
+                DispatchQueue.global().async {
+                    do {
+                        let listener = try self.startListener(params: tls.parameters)
+                        continuation.resume(returning: listener)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
+            configureAfterStart(listener: listener, tls: tls)
+        } else {
+            let pooled = await withCheckedContinuation { continuation in
+                DispatchQueue.global().async {
+                    let pooled = ListenerPool.shared.checkout()
+                    continuation.resume(returning: pooled)
+                }
+            }
+            configurePooledListener(pooled)
         }
-        configureAfterStart(listener: listener, tls: tls)
         return self
     }
 
+    /// Start a per-test NWListener for TLS. Only used when a `TLSConfiguration`
+    /// is provided — plain TCP uses the shared ``ListenerPool``.
     private func startListener(params: NWParameters) throws -> NWListener {
         let listener = try NWListener(using: params, on: .any)
 
@@ -145,7 +143,7 @@ public final class MockWebServer: @unchecked Sendable {
 
         listener.start(queue: dispatchQueue)
 
-        guard semaphore.wait(timeout: .now() + 5) == .success else {
+        guard semaphore.wait(timeout: .now() + 10) == .success else {
             listener.cancel()
             throw MockWebServerError.startTimedOut
         }
@@ -162,6 +160,17 @@ public final class MockWebServer: @unchecked Sendable {
             self.listener = listener
             self._port = listener.port?.rawValue ?? 0
             self.useTLS = tls != nil
+        }
+    }
+
+    private func configurePooledListener(_ pooled: ListenerPool.PooledListener) {
+        pooled.connectionHandler = { [weak self] connection in
+            self?.handleNewConnection(connection)
+        }
+        lock.withLock {
+            self.pooledListener = pooled
+            self.listener = pooled.listener
+            self._port = pooled.port
         }
     }
 
@@ -285,9 +294,11 @@ public final class MockWebServer: @unchecked Sendable {
     /// Any pending ``takeRequest(timeout:)`` calls will return `nil`.
     public func shutdown() {
         lock.lock()
+        let currentPooled = pooledListener
         let currentListener = listener
         let currentHandlers = handlers
         let currentWaiters = requestWaiters
+        pooledListener = nil
         listener = nil
         handlers = []
         requestWaiters = []
@@ -300,28 +311,48 @@ public final class MockWebServer: @unchecked Sendable {
         useTLS = false
         lock.unlock()
 
+        // Immediately stop routing connections before cancelling handlers.
+        // This prevents stray requests from a previous borrower's URLSession
+        // from being routed to the next borrower after the listener is returned
+        // to the pool.
+        currentPooled?.connectionHandler = nil
+
         for waiter in currentWaiters {
             waiter.continuation.resume(returning: nil)
         }
         for handler in currentHandlers {
             handler.cancel()
         }
-        currentListener?.cancel()
+
+        if let currentPooled {
+            ListenerPool.shared.checkin(currentPooled)
+        } else {
+            currentListener?.cancel()
+        }
     }
 
     deinit {
         // Cancel without resuming waiters (they'll be deallocated)
         lock.lock()
+        let currentPooled = pooledListener
         let currentListener = listener
         let currentHandlers = handlers
+        pooledListener = nil
         listener = nil
         handlers = []
         lock.unlock()
 
+        currentPooled?.connectionHandler = nil
+
         for handler in currentHandlers {
             handler.cancel()
         }
-        currentListener?.cancel()
+
+        if let currentPooled {
+            ListenerPool.shared.checkin(currentPooled)
+        } else {
+            currentListener?.cancel()
+        }
     }
 
     // MARK: - Private

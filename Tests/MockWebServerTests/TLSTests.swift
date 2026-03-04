@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import MockWebServer
 
-@Suite(.serialized) struct TLSTests {
+@Suite struct TLSTests {
 
     @Test func loadLocalhostCertificate() throws {
         let tls = try TLSConfiguration.localhost()
