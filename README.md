@@ -266,6 +266,85 @@ server.enqueue(
 
 See [SocketPolicyTests.swift](Examples/SocketPolicyTests.swift) for runnable examples of socket policies and throttling.
 
+### Rate limiting
+
+Return 429 responses with a `Retry-After` header using `.rateLimited()`:
+
+```swift
+// Simple 429 with Retry-After header
+server.enqueue(.rateLimited(retryAfter: 30))
+
+// 429 with a JSON error body
+server.enqueue(.rateLimited(retryAfter: 60, body: .json(#"{"error": "rate_limited"}"#)))
+```
+
+Use `enqueueRateLimited(retryAfter:then:)` to set up a 429 followed by a success response. Unlike redirects, URLSession does not retry 429s automatically -- your client must handle the retry:
+
+```swift
+server.enqueueRateLimited(
+    retryAfter: 1,
+    then: .json(#"{"status": "ok"}"#)
+)
+
+let url = server.url(forPath: "/api/data")
+
+// First request gets 429
+let (_, r1) = try await session.data(from: url)
+#expect((r1 as! HTTPURLResponse).statusCode == 429)
+
+// Retry gets the success response
+let (data, r2) = try await session.data(from: url)
+#expect((r2 as! HTTPURLResponse).statusCode == 200)
+```
+
+See [RateLimitTests.swift](Examples/RateLimitTests.swift) for runnable examples.
+
+### HTTP Basic Authentication
+
+Return a 401 challenge with a `WWW-Authenticate` header using `.basicAuthChallenge()`:
+
+```swift
+server.enqueue(.basicAuthChallenge(realm: "Restricted Area"))
+server.enqueue(.basicAuthChallenge())  // default realm: "MockWebServer"
+server.enqueue(.basicAuthChallenge(realm: "API", body: "Authentication required"))
+```
+
+Use `enqueueAuthChallenge(_:then:)` to keep the 401 in the queue until a request with Basic credentials arrives:
+
+```swift
+server.enqueueAuthChallenge(
+    .basicAuthChallenge(realm: "Test"),
+    then: .json(#"{"status": "authenticated"}"#)
+)
+
+// Request without auth → 401
+// Request with Basic credentials → 200
+```
+
+Extract credentials from recorded requests using `basicAuthCredentials`:
+
+```swift
+let recorded = await server.takeRequest()
+let auth = try #require(recorded?.basicAuthCredentials)
+#expect(auth.username == "admin")
+#expect(auth.password == "secret123")
+```
+
+Combine with closure routes for dynamic authentication:
+
+```swift
+server.route("/api/secure") { request in
+    guard let auth = request.basicAuthCredentials,
+          auth.username == "validuser",
+          auth.password == "validpass" else {
+        return .basicAuthChallenge(realm: "API")
+    }
+    return .json(#"{"message": "Authenticated!"}"#)
+}
+```
+
+See [BasicAuthTests.swift](Examples/BasicAuthTests.swift) for runnable examples.
+
 ### HTTPS and TLS testing
 
 Start the server with a `TLSConfiguration` to enable HTTPS. The package includes pre-generated certificates for common test scenarios:
@@ -277,7 +356,7 @@ try server.start(tls: tls)
 
 // URLSession will reject self-signed certs by default.
 // Use a delegate that trusts all certs for testing:
-let delegate = TrustAllDelegate()
+let delegate = TrustAllCertsDelegate()
 let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
 let (data, _) = try await session.data(from: server.url(forPath: "/secure"))
 ```
@@ -320,6 +399,8 @@ See the [`Examples/`](Examples/) directory for complete, copy-paste-ready test f
 - **[ClosureRouteTests.swift](Examples/ClosureRouteTests.swift)** -- Dynamic request handling with closure routes
 - **[MethodRoutingTests.swift](Examples/MethodRoutingTests.swift)** -- REST-style GET/POST/DELETE on the same path
 - **[RequestVerificationTests.swift](Examples/RequestVerificationTests.swift)** -- Inspecting headers, verifying call order, async waiting
+- **[RateLimitTests.swift](Examples/RateLimitTests.swift)** -- 429 responses, Retry-After headers, retry-then-succeed patterns
+- **[BasicAuthTests.swift](Examples/BasicAuthTests.swift)** -- 401 challenges, credential extraction, dynamic auth validation
 - **[SocketPolicyTests.swift](Examples/SocketPolicyTests.swift)** -- Timeouts, connection drops, throttling, slow responses
 - **[TLSExamples.swift](Examples/TLSExamples.swift)** -- HTTPS, expired certs, wrong hostname, protocol mismatch
 
