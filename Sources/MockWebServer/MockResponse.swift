@@ -146,6 +146,44 @@ public struct MockResponse: Sendable {
         )
     }
 
+    /// Creates a 401 Unauthorized response with a Basic authentication challenge.
+    ///
+    /// The response includes the `WWW-Authenticate: Basic realm="..."` header,
+    /// prompting clients to retry with credentials.
+    ///
+    /// For the enqueue-based challenge pattern where the 401 persists until
+    /// credentials arrive, use ``MockWebServer/enqueueAuthChallenge(_:then:)``:
+    /// ```swift
+    /// server.enqueueAuthChallenge(
+    ///     .basicAuthChallenge(realm: "Restricted Area"),
+    ///     then: .json(#"{"authenticated": true}"#)
+    /// )
+    /// ```
+    ///
+    /// For route-based authentication, use a closure route instead:
+    /// ```swift
+    /// server.route("/protected") { request in
+    ///     guard let auth = request.basicAuthCredentials,
+    ///           auth.username == "user", auth.password == "pass" else {
+    ///         return .basicAuthChallenge(realm: "API")
+    ///     }
+    ///     return .json(#"{"ok": true}"#)
+    /// }
+    /// ```
+    public static func basicAuthChallenge(realm: String = "MockWebServer", body: String = "Unauthorized") -> MockResponse {
+        let escapedRealm = realm
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return MockResponse(
+            statusCode: 401,
+            headers: [
+                ("WWW-Authenticate", "Basic realm=\"\(escapedRealm)\""),
+                ("Content-Type", "text/plain; charset=utf-8"),
+            ],
+            body: Data(body.utf8)
+        )
+    }
+
     /// Loads a response body from a bundle resource file (typically using `Bundle.module`).
     ///
     /// The `Content-Type` header is inferred from the file extension unless `contentType` is provided.
