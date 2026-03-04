@@ -164,7 +164,7 @@ public final class MockWebServer: @unchecked Sendable {
     }
 
     private func configurePooledListener(_ pooled: ListenerPool.PooledListener) {
-        pooled.listener.newConnectionHandler = { [weak self] connection in
+        pooled.connectionHandler = { [weak self] connection in
             self?.handleNewConnection(connection)
         }
         lock.withLock {
@@ -311,11 +311,11 @@ public final class MockWebServer: @unchecked Sendable {
         useTLS = false
         lock.unlock()
 
-        // Immediately reject new connections before cancelling handlers.
+        // Immediately stop routing connections before cancelling handlers.
         // This prevents stray requests from a previous borrower's URLSession
         // from being routed to the next borrower after the listener is returned
         // to the pool.
-        currentPooled?.listener.newConnectionHandler = { $0.cancel() }
+        currentPooled?.connectionHandler = nil
 
         for waiter in currentWaiters {
             waiter.continuation.resume(returning: nil)
@@ -342,7 +342,7 @@ public final class MockWebServer: @unchecked Sendable {
         handlers = []
         lock.unlock()
 
-        currentPooled?.listener.newConnectionHandler = { $0.cancel() }
+        currentPooled?.connectionHandler = nil
 
         for handler in currentHandlers {
             handler.cancel()
