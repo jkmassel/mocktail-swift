@@ -38,7 +38,7 @@ import MockWebServer
 
 @Test func fetchGreeting() async throws {
     try await MockWebServer.withServer { server in
-        server.enqueue(MockResponse(statusCode: 200).withBody("Hello!"))
+        server.enqueue(MockResponse(statusCode: 200).withBody(.text("Hello!")))
 
         let url = server.url(forPath: "/greeting")
         let (data, response) = try await URLSession.shared.data(from: url)
@@ -53,8 +53,7 @@ import MockWebServer
 The server starts automatically and shuts down when the closure returns. You can also manage the lifecycle manually:
 
 ```swift
-let server = MockWebServer()
-try server.start()
+let server = try await MockWebServer().start()
 defer { server.shutdown() }
 ```
 
@@ -173,8 +172,7 @@ Since MockWebServer is a real server, URLSession follows redirects automatically
 server.enqueueRedirect(
     to: "/api/v2/users.json",
     then: MockResponse(statusCode: 200)
-        .withBody(#"{"users": [{"id": 1, "name": "Alice"}]}"#)
-        .withHeader("Content-Type", "application/json")
+        .withBody(.json(#"{"users": [{"id": 1, "name": "Alice"}]}"#))
 )
 
 let (data, response) = try await session.data(from: server.url(forPath: "/api/v1/users"))
@@ -194,7 +192,7 @@ You can also use `MockResponse.redirect(to:)` directly if you need more control 
 ```swift
 server.enqueue(.redirect(to: "/step2", type: .permanent))
 server.enqueue(.redirect(to: "/step3"))
-server.enqueue(MockResponse(statusCode: 200).withBody("final"))
+server.enqueue(MockResponse(statusCode: 200).withBody(.text("final")))
 ```
 
 ### Verify requests
@@ -238,7 +236,7 @@ server.enqueue(MockResponse().withSocketPolicy(.disconnectImmediately))
 // Server responds after a delay
 server.enqueue(
     MockResponse(statusCode: 200)
-        .withBody("slow")
+        .withBody(.text("slow"))
         .withBodyDelay(.seconds(2))
 )
 ```
@@ -250,7 +248,7 @@ Simulate a slow network connection by throttling the response. The body is sent 
 ```swift
 server.enqueue(
     MockResponse(statusCode: 200)
-        .withBody(largePayload)
+        .withBody(.text(largePayload))
         .withThrottle(bytesPerSecond: 1024)
 )
 ```
@@ -260,7 +258,7 @@ Throttling composes with body delay -- the delay fires first, then the response 
 ```swift
 server.enqueue(
     MockResponse(statusCode: 200)
-        .withBody(data)
+        .withBody(.text(data))
         .withBodyDelay(.seconds(1))        // 1 second think time
         .withThrottle(bytesPerSecond: 512)  // then slow delivery
 )

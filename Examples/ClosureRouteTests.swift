@@ -12,8 +12,7 @@ import MockWebServer
 
     /// Use a closure route to return dynamic responses based on the request.
     @Test func dynamicRouting() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("/api/users") { request in
@@ -33,8 +32,7 @@ import MockWebServer
 
     /// Use method-specific closure routes for REST-style endpoints.
     @Test func methodBasedClosureRoutes() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.route("GET", "/items") { _ in

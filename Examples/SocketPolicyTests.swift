@@ -14,8 +14,7 @@ import MockWebServer
     /// Use .noResponse to test how your code handles a server that accepts
     /// the connection but never sends a reply.
     @Test func requestTimeout() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse().withSocketPolicy(.noResponse))
@@ -39,8 +38,7 @@ import MockWebServer
     /// Use .disconnectImmediately to test how your code handles
     /// a connection that is accepted then immediately closed.
     @Test func connectionDropped() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(MockResponse().withSocketPolicy(.disconnectImmediately))
@@ -66,14 +64,13 @@ import MockWebServer
     /// Use withThrottle(bytesPerSecond:) to simulate a slow network connection.
     /// The body is sent in chunks at the given rate.
     @Test func throttledResponse() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         let body = String(repeating: "x", count: 500)
         server.enqueue(
             MockResponse(statusCode: 200)
-                .withBody(body)
+                .withBody(.text(body))
                 .withThrottle(bytesPerSecond: 65536)
         )
 
@@ -88,13 +85,12 @@ import MockWebServer
 
     /// Use withBodyDelay() to simulate a slow server response.
     @Test func slowResponse() async throws {
-        let server = MockWebServer()
-        try server.start()
+        let server = try await MockWebServer().start()
         defer { server.shutdown() }
 
         server.enqueue(
             MockResponse(statusCode: 200)
-                .withBody("Finally!")
+                .withBody(.text("Finally!"))
                 .withBodyDelay(.milliseconds(500))
         )
 
